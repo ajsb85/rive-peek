@@ -7,6 +7,7 @@ call "%ROOT%\build\build_dll.bat"       || exit /b 1
 call "%ROOT%\build\build_rivshot.bat"   || exit /b 1
 call "%ROOT%\build\build_test.bat"      || exit /b 1
 call "%ROOT%\build\build_surrogate_test.bat" || exit /b 1
+call "%ROOT%\build\build_thumb_test.bat" || exit /b 1
 echo.
 echo === RivePeek build complete ===
 echo   build\bin\RivePeek.dll      (the preview handler - regsvr32 to install)

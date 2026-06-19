@@ -22,4 +22,8 @@ DEFINE_GUID(CLSID_RivePreviewHandler,
 // class points its ShellEx\<this> subkey at our CLSID.
 #define SHELLEX_PREVIEWHANDLER_STR L"{8895b1c6-b41f-4c1c-a562-0d564250836f}"
 
+// IThumbnailProvider's interface GUID, used as the ShellEx subkey for the file's
+// static thumbnail (grid icon).
+#define SHELLEX_THUMBNAILPROVIDER_STR L"{e357fccd-a995-4576-b01f-234630154e96}"
+
 #define RIVEPEEK_FRIENDLY_NAME L"RivePeek Rive (.riv) Preview Handler"

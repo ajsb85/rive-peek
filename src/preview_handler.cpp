@@ -4,9 +4,41 @@
 
 #include <shlwapi.h>   // QISearch / QITAB
 #include <d2d1helper.h>
+#include <cstdarg>
+#include <cstdio>
 #include <new>
 
 using namespace rivepeek;
+
+namespace rivepeek {
+void Log(const char* fmt, ...) {
+    // Off unless RIVEPEEK_LOG is set in the environment (checked once).
+    static int enabled = -1;
+    if (enabled < 0) {
+        char v[8];
+        enabled = GetEnvironmentVariableA("RIVEPEEK_LOG", v, sizeof(v)) > 0 ? 1 : 0;
+    }
+    if (!enabled) return;
+
+    char path[MAX_PATH];
+    DWORD n = GetTempPathA(MAX_PATH, path);
+    if (n == 0 || n > MAX_PATH) return;
+    strcat_s(path, "RivePeek.log");
+    FILE* f = nullptr;
+    if (fopen_s(&f, path, "a") != 0 || !f) return;
+
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    fprintf(f, "[%02d:%02d:%02d.%03d pid=%lu] ", st.wHour, st.wMinute, st.wSecond,
+            st.wMilliseconds, GetCurrentProcessId());
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(f, fmt, args);
+    va_end(args);
+    fputc('\n', f);
+    fclose(f);
+}
+} // namespace rivepeek
 
 namespace {
 const wchar_t* kWndClass = L"RivePeekPreviewWindow";
@@ -33,6 +65,7 @@ namespace rivepeek {
 RivePreviewHandler::RivePreviewHandler() {
     DllAddRef();
     QueryPerformanceFrequency(&m_freq);
+    Log("RivePreviewHandler constructed");
 }
 
 RivePreviewHandler::~RivePreviewHandler() {
@@ -50,6 +83,7 @@ IFACEMETHODIMP RivePreviewHandler::QueryInterface(REFIID riid, void** ppv) {
         QITABENT(RivePreviewHandler, IOleWindow),
         QITABENT(RivePreviewHandler, IObjectWithSite),
         QITABENT(RivePreviewHandler, IPreviewHandlerVisuals),
+        QITABENT(RivePreviewHandler, IThumbnailProvider),
         {0},
     };
     return QISearch(this, qit, riid, ppv);
@@ -90,11 +124,13 @@ IFACEMETHODIMP RivePreviewHandler::Initialize(IStream* stream, DWORD) {
         if (m_data.size() > (128ull << 20)) break; // sanity cap
         got = 0;
     }
+    Log("Initialize: read %zu bytes (grfMode hint)", m_data.size());
     return m_data.empty() ? E_FAIL : S_OK;
 }
 
 // -------------------------------------------------------- IPreviewHandler
 IFACEMETHODIMP RivePreviewHandler::SetWindow(HWND hwnd, const RECT* prc) {
+    Log("SetWindow: hwnd=%p", (void*)hwnd);
     m_parent = hwnd;
     if (prc) m_rect = *prc;
     if (m_hwnd && m_parent) {
@@ -115,8 +151,11 @@ IFACEMETHODIMP RivePreviewHandler::SetRect(const RECT* prc) {
 }
 
 IFACEMETHODIMP RivePreviewHandler::DoPreview() {
+    Log("DoPreview: parent=%p rect=(%ld,%ld,%ld,%ld) dataBytes=%zu",
+        (void*)m_parent, m_rect.left, m_rect.top, m_rect.right, m_rect.bottom,
+        m_data.size());
     if (m_hwnd) return S_OK; // already previewing
-    if (!m_parent) return E_FAIL;
+    if (!m_parent) { Log("DoPreview: FAIL no parent"); return E_FAIL; }
 
     if (!m_d2dFactory) {
         if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
@@ -134,12 +173,20 @@ IFACEMETHODIMP RivePreviewHandler::DoPreview() {
     if (!m_scene && !m_data.empty()) {
         m_scene = std::make_unique<RiveScene>(m_d2dFactory.Get(), m_wic.Get());
         if (!m_scene->load(m_data.data(), m_data.size())) {
+            Log("DoPreview: scene load FAILED: %s", m_scene->error().c_str());
             m_scene.reset(); // leave blank background on failure
+        } else {
+            Log("DoPreview: scene loaded (artboard %.0fx%.0f)", m_scene->width(),
+                m_scene->height());
         }
     }
 
     createPreviewWindow();
-    if (!m_hwnd) return E_FAIL;
+    if (!m_hwnd) {
+        Log("DoPreview: FAIL CreateWindow err=%lu", GetLastError());
+        return E_FAIL;
+    }
+    Log("DoPreview: preview window created hwnd=%p", (void*)m_hwnd);
 
     QueryPerformanceCounter(&m_last);
     if (m_scene) {
@@ -209,6 +256,81 @@ IFACEMETHODIMP RivePreviewHandler::GetSite(REFIID riid, void** ppv) {
     return E_FAIL;
 }
 
+// ----------------------------------------------------- IThumbnailProvider
+IFACEMETHODIMP RivePreviewHandler::GetThumbnail(UINT cx, HBITMAP* phbmp,
+                                                WTS_ALPHATYPE* pdwAlpha) {
+    if (!phbmp || !pdwAlpha) return E_POINTER;
+    *phbmp = nullptr;
+    *pdwAlpha = WTSAT_ARGB;
+    if (m_data.empty() || cx == 0) return E_FAIL;
+
+    if (!m_d2dFactory &&
+        FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
+                                 __uuidof(ID2D1Factory),
+                                 reinterpret_cast<void**>(m_d2dFactory.GetAddressOf()))))
+        return E_FAIL;
+    if (!m_wic &&
+        FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr,
+                                CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&m_wic))))
+        return E_FAIL;
+
+    RiveScene scene(m_d2dFactory.Get(), m_wic.Get());
+    if (!scene.load(m_data.data(), m_data.size())) {
+        Log("GetThumbnail: scene load FAILED: %s", scene.error().c_str());
+        return E_FAIL;
+    }
+    scene.advance(0.0f); // static first frame
+
+    // Fit the artboard aspect inside cx x cx.
+    UINT w = cx, h = cx;
+    float aw = scene.width(), ah = scene.height();
+    if (aw > 0 && ah > 0) {
+        if (aw >= ah) { w = cx; h = std::max<UINT>(1, (UINT)(cx * ah / aw)); }
+        else { h = cx; w = std::max<UINT>(1, (UINT)(cx * aw / ah)); }
+    }
+
+    ComPtr<IWICBitmap> wicBmp;
+    if (FAILED(m_wic->CreateBitmap(w, h, GUID_WICPixelFormat32bppPBGRA,
+                                   WICBitmapCacheOnLoad, &wicBmp)))
+        return E_FAIL;
+
+    auto rtProps = D2D1::RenderTargetProperties(
+        D2D1_RENDER_TARGET_TYPE_DEFAULT,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+    ComPtr<ID2D1RenderTarget> rt;
+    if (FAILED(m_d2dFactory->CreateWicBitmapRenderTarget(wicBmp.Get(), rtProps, &rt)))
+        return E_FAIL;
+
+    rt->BeginDraw();
+    rt->Clear(D2D1::ColorF(0, 0.0f)); // transparent
+    {
+        D2DRenderer renderer(rt.Get(), m_d2dFactory.Get());
+        scene.draw(renderer, (float)w, (float)h);
+    }
+    if (FAILED(rt->EndDraw())) return E_FAIL;
+
+    // Copy into a top-down 32bpp DIB section (premultiplied BGRA -> WTSAT_ARGB).
+    BITMAPINFO bi = {};
+    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bi.bmiHeader.biWidth = (LONG)w;
+    bi.bmiHeader.biHeight = -(LONG)h; // top-down
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HBITMAP hbmp = CreateDIBSection(nullptr, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!hbmp || !bits) return E_OUTOFMEMORY;
+
+    if (FAILED(wicBmp->CopyPixels(nullptr, w * 4, w * 4 * h, (BYTE*)bits))) {
+        DeleteObject(hbmp);
+        return E_FAIL;
+    }
+    *phbmp = hbmp;
+    *pdwAlpha = WTSAT_ARGB;
+    Log("GetThumbnail: cx=%u -> %ux%u", cx, w, h);
+    return S_OK;
+}
+
 // --------------------------------------------------------------- rendering
 void RivePreviewHandler::createPreviewWindow() {
     if (!registerWindowClass()) return;
@@ -258,6 +380,9 @@ void RivePreviewHandler::onPaint() {
         m_scene->draw(renderer, sz.width, sz.height);
     }
     HRESULT hr = m_rt->EndDraw();
+    static bool firstPaint = true;
+    if (firstPaint) { Log("onPaint: first EndDraw hr=0x%08lx size=%.0fx%.0f scene=%d",
+                          hr, sz.width, sz.height, m_scene ? 1 : 0); firstPaint = false; }
     if (hr == D2DERR_RECREATE_TARGET) {
         releaseDeviceResources(); // rebuilt on next paint
     }

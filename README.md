@@ -8,6 +8,9 @@ Select a `.riv` file with the preview pane open (**Alt + P**) and the default
 artboard plays, fit and centered, isolated inside Windows' `prevhost.exe`
 surrogate process so a malformed file can never destabilize Explorer.
 
+It also registers an **`IThumbnailProvider`**, so `.riv` files show a static
+first-frame thumbnail as their icon in the Explorer file grid.
+
 | Headless render (`rivshot`) | Live preview pane (captured from the real COM handler) |
 |---|---|
 | ![coin](docs/render-coin.png) | ![preview pane](docs/preview-pane.png) |
@@ -79,12 +82,15 @@ src/
   rive_d2d.hpp/.cpp   Direct2D implementation of rive::Factory + rive::Renderer
   rive_scene.hpp/.cpp loads a .riv, instantiates artboard + state machine, draws
   preview_handler.*   the COM handler (IPreviewHandler, IInitializeWithStream,
-                      IOleWindow, IObjectWithSite, IPreviewHandlerVisuals)
+                      IOleWindow, IObjectWithSite, IPreviewHandlerVisuals,
+                      IThumbnailProvider)
   dllmain.cpp         COM class factory, DLL exports, (un)registration
   rivepeek.def        exported entry points
 tools/
   rivshot.cpp         headless .riv → .png renderer / validation harness
   preview_test.cpp    in-process integration test of the full COM pipeline
+  surrogate_test.cpp  out-of-process (prevhost.exe) activation test
+  thumb_test.cpp      IThumbnailProvider test (.riv → thumbnail .png)
 build/                MSVC build scripts (no CMake required)
 install/              register.ps1 / unregister.ps1 / RivePeek.reg
 rive-runtime/         Rive C++ runtime (git submodule)
@@ -157,7 +163,17 @@ build\bin\preview_test.exe sample.riv capture.png
 
 # Render every .riv in a folder and tally pass/fail
 build\validate.ps1 -Dir "path\to\riv\files"
+
+# Replicate Explorer's out-of-process activation (loads the handler in prevhost.exe)
+build\bin\surrogate_test.exe sample.riv
+
+# Produce the static thumbnail the file grid would show
+build\bin\thumb_test.exe sample.riv thumb.png 256
 ```
+
+**Diagnostics:** set the environment variable `RIVEPEEK_LOG=1` to make the
+handler append a trace of each COM call (`Initialize`, `DoPreview`,
+`GetThumbnail`, errors) to `%TEMP%\RivePeek.log`. It is silent otherwise.
 
 `preview_test.exe` performs the exact sequence the Shell does
 (`DllGetClassObject` → `IClassFactory::CreateInstance` → `QueryInterface` for

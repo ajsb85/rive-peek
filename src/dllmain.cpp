@@ -60,6 +60,8 @@ private:
 
 // ------------------------------------------------------------------- exports
 STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void** ppv) {
+    rivepeek::Log("DllGetClassObject called (match=%d)",
+                  rclsid == CLSID_RivePreviewHandler ? 1 : 0);
     if (rclsid != CLSID_RivePreviewHandler) return CLASS_E_CLASSNOTAVAILABLE;
     auto* factory = new (std::nothrow) ClassFactory();
     if (!factory) return E_OUTOFMEMORY;
@@ -112,8 +114,10 @@ STDAPI DllRegisterServer() {
         // can't decode a .riv and show a generic picture icon) instead of ours.
         {L"Software\\Classes\\.riv", nullptr, L"RivePeek.Document"},
         {L"Software\\Classes\\.riv\\ShellEx\\" SHELLEX_PREVIEWHANDLER_STR, nullptr, RIVEPEEK_CLSID_STR},
+        {L"Software\\Classes\\.riv\\ShellEx\\" SHELLEX_THUMBNAILPROVIDER_STR, nullptr, RIVEPEEK_CLSID_STR},
         {L"Software\\Classes\\RivePeek.Document", nullptr, L"Rive Animation"},
         {L"Software\\Classes\\RivePeek.Document\\ShellEx\\" SHELLEX_PREVIEWHANDLER_STR, nullptr, RIVEPEEK_CLSID_STR},
+        {L"Software\\Classes\\RivePeek.Document\\ShellEx\\" SHELLEX_THUMBNAILPROVIDER_STR, nullptr, RIVEPEEK_CLSID_STR},
         // Approved preview-handlers list (the Shell's gatekeeper).
         {L"Software\\Microsoft\\Windows\\CurrentVersion\\PreviewHandlers", RIVEPEEK_CLSID_STR, RIVEPEEK_FRIENDLY_NAME},
     };

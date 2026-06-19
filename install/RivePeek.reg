@@ -30,10 +30,17 @@ Windows Registry Editor Version 5.00
 [HKEY_CURRENT_USER\SOFTWARE\Classes\.riv\ShellEx\{8895b1c6-b41f-4c1c-a562-0d564250836f}]
 @="{7B2E9C14-5F3A-4D6B-9E21-3C8A7F0D5B42}"
 
+; IThumbnailProvider — static first-frame thumbnail (grid icon)
+[HKEY_CURRENT_USER\SOFTWARE\Classes\.riv\ShellEx\{e357fccd-a995-4576-b01f-234630154e96}]
+@="{7B2E9C14-5F3A-4D6B-9E21-3C8A7F0D5B42}"
+
 [HKEY_CURRENT_USER\SOFTWARE\Classes\RivePeek.Document]
 @="Rive Animation"
 
 [HKEY_CURRENT_USER\SOFTWARE\Classes\RivePeek.Document\ShellEx\{8895b1c6-b41f-4c1c-a562-0d564250836f}]
+@="{7B2E9C14-5F3A-4D6B-9E21-3C8A7F0D5B42}"
+
+[HKEY_CURRENT_USER\SOFTWARE\Classes\RivePeek.Document\ShellEx\{e357fccd-a995-4576-b01f-234630154e96}]
 @="{7B2E9C14-5F3A-4D6B-9E21-3C8A7F0D5B42}"
 
 ; The approved-preview-handlers gatekeeper (per-user list). Without this entry

@@ -11,6 +11,7 @@
 #include <windows.h>
 #include <ole2.h>          // IOleWindow
 #include <shobjidl.h>      // IPreviewHandler, IObjectWithSite, IInitializeWithStream
+#include <thumbcache.h>    // IThumbnailProvider
 #include <d2d1.h>
 #include <wincodec.h>
 #include <wrl/client.h>
@@ -27,11 +28,16 @@ extern HINSTANCE g_hInst;
 void DllAddRef();
 void DllRelease();
 
+// Lightweight diagnostic log to %TEMP%\RivePeek.log. Always on so we can confirm
+// whether the Shell actually loads and drives the handler inside prevhost.exe.
+void Log(const char* fmt, ...);
+
 class RivePreviewHandler : public IInitializeWithStream,
                            public IPreviewHandler,
                            public IOleWindow,
                            public IPreviewHandlerVisuals,
-                           public IObjectWithSite {
+                           public IObjectWithSite,
+                           public IThumbnailProvider {
 public:
     RivePreviewHandler();
     virtual ~RivePreviewHandler();
@@ -65,6 +71,9 @@ public:
     // IObjectWithSite
     IFACEMETHODIMP SetSite(IUnknown* site) override;
     IFACEMETHODIMP GetSite(REFIID riid, void** ppv) override;
+
+    // IThumbnailProvider — static first-frame thumbnail for the file's grid icon.
+    IFACEMETHODIMP GetThumbnail(UINT cx, HBITMAP* phbmp, WTS_ALPHATYPE* pdwAlpha) override;
 
 public:
     static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
