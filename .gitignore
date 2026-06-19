@@ -13,6 +13,9 @@ build/_test.bat
 *.png
 !docs/*.png
 
+# Source screen recordings (the committed demo.gif is generated from these)
+docs/*.mp4
+
 # MSVC / editor cruft
 *.obj
 *.pdb

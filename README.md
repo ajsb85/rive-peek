@@ -17,6 +17,12 @@ surrogate process so a malformed file can never destabilize Explorer.
 It also registers an **`IThumbnailProvider`**, so `.riv` files show a static
 first-frame thumbnail as their icon in the Explorer file grid.
 
+<p align="center">
+  <img src="docs/demo.gif" width="820"
+       alt="File Explorer showing .riv files with first-frame thumbnails in the grid and an animated Rive character playing in the preview pane.">
+</p>
+<p align="center"><sub>RivePeek in File Explorer — static <code>.riv</code> thumbnails in the grid and a live, animated preview pane.</sub></p>
+
 | Headless render (`rivshot`) | Live preview pane (captured from the real COM handler) |
 |---|---|
 | ![coin](docs/render-coin.png) | ![preview pane](docs/preview-pane.png) |
