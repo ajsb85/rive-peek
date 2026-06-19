@@ -16,7 +16,7 @@ set "CFLAGS=/nologo /MT /O2 /EHsc /std:c++17 /GR- /wd4996 /wd4244 /wd4267 /I "%R
 cl %CFLAGS% %DEFS% ^
    "%ROOT%\tools\rivshot.cpp" "%ROOT%\src\rive_d2d.cpp" "%ROOT%\src\rive_scene.cpp" ^
    /Fe"%OUT%\rivshot.exe" /Fo"%ROOT%\build\obj\\" ^
-   /link "%ROOT%\build\rive_core.lib" d2d1.lib windowscodecs.lib ole32.lib user32.lib ^
+   /link "%ROOT%\build\rive_core.lib" d2d1.lib dxguid.lib windowscodecs.lib ole32.lib user32.lib ^
    >"%ROOT%\build\rivshot_build.log" 2>&1
 
 if errorlevel 1 (

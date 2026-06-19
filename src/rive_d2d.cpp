@@ -5,6 +5,7 @@
 #include "rive_d2d.hpp"
 
 #include <d2d1helper.h>
+#include <d2d1effects.h>   // CLSID_D2D1Blend, D2D1_BLEND_PROP_MODE
 #include <algorithm>
 #include <cstring>
 
@@ -13,6 +14,29 @@ using namespace rive;
 namespace rivepeek {
 
 // --- helpers ---------------------------------------------------------------
+
+// Map a Rive blend mode to its Direct2D `Blend` effect equivalent. Returns false
+// for `srcOver` (the normal compositing path, which needs no effect).
+static bool mapBlend(BlendMode m, D2D1_BLEND_MODE& out) {
+    switch (m) {
+        case BlendMode::multiply:   out = D2D1_BLEND_MODE_MULTIPLY;    return true;
+        case BlendMode::screen:     out = D2D1_BLEND_MODE_SCREEN;      return true;
+        case BlendMode::overlay:    out = D2D1_BLEND_MODE_OVERLAY;     return true;
+        case BlendMode::darken:     out = D2D1_BLEND_MODE_DARKEN;      return true;
+        case BlendMode::lighten:    out = D2D1_BLEND_MODE_LIGHTEN;     return true;
+        case BlendMode::colorDodge: out = D2D1_BLEND_MODE_COLOR_DODGE; return true;
+        case BlendMode::colorBurn:  out = D2D1_BLEND_MODE_COLOR_BURN;  return true;
+        case BlendMode::hardLight:  out = D2D1_BLEND_MODE_HARD_LIGHT;  return true;
+        case BlendMode::softLight:  out = D2D1_BLEND_MODE_SOFT_LIGHT;  return true;
+        case BlendMode::difference: out = D2D1_BLEND_MODE_DIFFERENCE;  return true;
+        case BlendMode::exclusion:  out = D2D1_BLEND_MODE_EXCLUSION;   return true;
+        case BlendMode::hue:        out = D2D1_BLEND_MODE_HUE;         return true;
+        case BlendMode::saturation: out = D2D1_BLEND_MODE_SATURATION;  return true;
+        case BlendMode::color:      out = D2D1_BLEND_MODE_COLOR;       return true;
+        case BlendMode::luminosity: out = D2D1_BLEND_MODE_LUMINOSITY;  return true;
+        case BlendMode::srcOver:    default:                          return false;
+    }
+}
 
 static D2D1_COLOR_F toColorF(ColorInt c) {
     return D2D1::ColorF(colorRed(c) / 255.0f, colorGreen(c) / 255.0f,
@@ -262,6 +286,10 @@ rcp<RenderImage> D2DFactory::decodeImage(Span<const uint8_t> bytes) {
 D2DRenderer::D2DRenderer(ID2D1RenderTarget* rt, ID2D1Factory* factory)
     : m_rt(rt), m_factory(factory) {
     m_rt->SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+    // A device context (D2D1.1+) is needed for the Blend effect used by
+    // non-srcOver blend modes. Both the Hwnd and WIC-bitmap render targets
+    // expose it on Win8+; if not, blends transparently degrade to srcOver.
+    m_rt->QueryInterface(IID_PPV_ARGS(m_dc.GetAddressOf()));
 }
 
 void D2DRenderer::save() {
@@ -270,7 +298,10 @@ void D2DRenderer::save() {
 }
 
 void D2DRenderer::restore() {
-    for (int i = 0; i < m_state.clipLayers; ++i) m_rt->PopLayer();
+    for (int i = 0; i < m_state.clipLayers; ++i) {
+        m_rt->PopLayer();
+        if (!m_clips.empty()) m_clips.pop_back();
+    }
     if (!m_stack.empty()) {
         m_state = m_stack.back();
         m_stack.pop_back();
@@ -296,6 +327,7 @@ void D2DRenderer::clipPath(RenderPath* path) {
                               D2D1_LAYER_OPTIONS_NONE),
         layer.Get());
     m_state.clipLayers++;
+    m_clips.push_back({geo, m_state.transform});
 }
 
 void D2DRenderer::drawPath(RenderPath* path, RenderPaint* paint) {
@@ -303,28 +335,52 @@ void D2DRenderer::drawPath(RenderPath* path, RenderPaint* paint) {
     auto* pt = static_cast<D2DPaint*>(paint);
     auto* geo = p->geometry();
     if (!geo) return;
-    auto brush = pt->brush(m_rt, m_state.opacity);
-    if (!brush) return;
-    applyTransform();
-    if (pt->style() == RenderPaintStyle::fill) {
-        m_rt->FillGeometry(geo, brush.Get());
+
+    // The geometry and stroke style come from the factory (device-independent),
+    // so this can draw onto either m_rt or an offscreen blend target; the brush
+    // is rebuilt per target inside the lambda.
+    const bool fill = pt->style() == RenderPaintStyle::fill;
+    auto emit = [&](ID2D1RenderTarget* tgt) {
+        auto brush = pt->brush(tgt, m_state.opacity);
+        if (!brush) return;
+        if (fill) {
+            tgt->FillGeometry(geo, brush.Get());
+        } else {
+            auto ss = pt->strokeStyle(m_factory);
+            tgt->DrawGeometry(geo, brush.Get(), pt->thickness(), ss.Get());
+        }
+    };
+
+    D2D1_BLEND_MODE bm;
+    if (m_dc && mapBlend(pt->blendMode(), bm)) {
+        blendComposite(emit, bm);
     } else {
-        auto ss = pt->strokeStyle(m_factory);
-        m_rt->DrawGeometry(geo, brush.Get(), pt->thickness(), ss.Get());
+        applyTransform();
+        emit(m_rt);
     }
 }
 
 void D2DRenderer::drawImage(const RenderImage* image, ImageSampler sampler,
-                            BlendMode, float opacity) {
+                            BlendMode blend, float opacity) {
     auto* img = static_cast<const D2DImage*>(image);
-    auto* bmp = img->bitmap(m_rt);
-    if (!bmp) return;
-    applyTransform();
+    const float w = (float)img->width(), h = (float)img->height();
     auto interp = sampler.filter == ImageFilter::nearest
                       ? D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR
                       : D2D1_BITMAP_INTERPOLATION_MODE_LINEAR;
-    D2D1_RECT_F dst = D2D1::RectF(0, 0, (float)img->width(), (float)img->height());
-    m_rt->DrawBitmap(bmp, dst, opacity * m_state.opacity, interp, nullptr);
+    auto emit = [&](ID2D1RenderTarget* tgt) {
+        auto* bmp = img->bitmap(tgt);
+        if (!bmp) return;
+        D2D1_RECT_F dst = D2D1::RectF(0, 0, w, h);
+        tgt->DrawBitmap(bmp, dst, opacity * m_state.opacity, interp, nullptr);
+    };
+
+    D2D1_BLEND_MODE bm;
+    if (m_dc && mapBlend(blend, bm)) {
+        blendComposite(emit, bm);
+    } else {
+        applyTransform();
+        emit(m_rt);
+    }
 }
 
 void D2DRenderer::drawImageMesh(const RenderImage* image, ImageSampler sampler,
@@ -401,6 +457,88 @@ void D2DRenderer::drawImageMesh(const RenderImage* image, ImageSampler sampler,
         sink->Close();
         m_rt->FillGeometry(tri.Get(), brush.Get());
     }
+}
+
+void D2DRenderer::blendComposite(
+        const std::function<void(ID2D1RenderTarget*)>& emit, D2D1_BLEND_MODE mode) {
+    // srcOver fallback, used whenever the blended path can't be set up. Leaves
+    // output no worse than a renderer that never blended at all.
+    auto fallback = [&] { applyTransform(); emit(m_rt); };
+    if (!m_dc) { fallback(); return; }
+
+    const D2D1_SIZE_U px = m_dc->GetPixelSize();
+    if (px.width == 0 || px.height == 0) { fallback(); return; }
+    float dpiX = 96.0f, dpiY = 96.0f;
+    m_rt->GetDpi(&dpiX, &dpiY);
+    const auto pf = D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,
+                                      D2D1_ALPHA_MODE_PREMULTIPLIED);
+
+    // 1) Snapshot the current backdrop into a standalone bitmap.
+    m_dc->Flush();
+    ComPtr<ID2D1Bitmap> backdrop;
+    if (FAILED(m_dc->CreateBitmap(px, nullptr, 0,
+            D2D1::BitmapProperties(pf, dpiX, dpiY), &backdrop)) ||
+        FAILED(backdrop->CopyFromRenderTarget(nullptr, m_rt, nullptr))) {
+        fallback();
+        return;
+    }
+
+    // 2) Render the shape alone onto a transparent foreground target, on a
+    //    secondary device context (the primary one is mid-BeginDraw and can't
+    //    switch targets). Active clips are replayed so the blend stays confined
+    //    to the clipped region.
+    ComPtr<ID2D1Device> device;
+    m_dc->GetDevice(&device);
+    ComPtr<ID2D1DeviceContext> fx;
+    if (!device ||
+        FAILED(device->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &fx))) {
+        fallback();
+        return;
+    }
+    ComPtr<ID2D1Bitmap1> fg;
+    if (FAILED(fx->CreateBitmap(px, nullptr, 0,
+            D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET, pf, dpiX, dpiY),
+            &fg))) {
+        fallback();
+        return;
+    }
+    fx->SetTarget(fg.Get());
+    fx->SetDpi(dpiX, dpiY);
+    fx->SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+    fx->BeginDraw();
+    fx->Clear(D2D1::ColorF(0, 0.0f));
+    int pushed = 0;
+    for (const auto& c : m_clips) {
+        ComPtr<ID2D1Layer> layer;
+        if (FAILED(fx->CreateLayer(nullptr, &layer))) break;
+        fx->SetTransform(c.xform);
+        fx->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), c.geo.Get(),
+                          D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                          D2D1::Matrix3x2F::Identity(), 1.0f, nullptr,
+                          D2D1_LAYER_OPTIONS_NONE),
+                      layer.Get());
+        ++pushed;
+    }
+    fx->SetTransform(m_state.transform);
+    emit(fx.Get());
+    for (int i = 0; i < pushed; ++i) fx->PopLayer();
+    if (FAILED(fx->EndDraw())) { fallback(); return; }
+
+    // 3) result = blend(backdrop, foreground), copied back over the target.
+    //    Where the foreground is transparent the W3C blend reduces to the
+    //    backdrop, so a straight copy leaves untouched pixels unchanged.
+    ComPtr<ID2D1Effect> blend;
+    if (FAILED(m_dc->CreateEffect(CLSID_D2D1Blend, &blend))) { fallback(); return; }
+    blend->SetInput(0, backdrop.Get());
+    blend->SetInput(1, fg.Get());
+    blend->SetValue(D2D1_BLEND_PROP_MODE, mode);
+
+    ComPtr<ID2D1Image> result;
+    blend->GetOutput(&result);
+    m_dc->SetTransform(D2D1::Matrix3x2F::Identity());
+    m_dc->DrawImage(result.Get(), nullptr, nullptr,
+                    D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+                    D2D1_COMPOSITE_MODE_SOURCE_COPY);
 }
 
 } // namespace rivepeek

@@ -81,7 +81,8 @@ abstract embedding interfaces directly on top of Direct2D + WIC:
 - **`rive::Renderer`** → `D2DRenderer`: maps `save`/`restore`, `transform`,
   `clipPath` (geometry-mask layers), `drawPath` (fill/stroke), `drawImage`, and
   `drawImageMesh` (per-triangle affine-textured fills) onto an
-  `ID2D1RenderTarget`.
+  `ID2D1RenderTarget`. Non-`srcOver` blend modes are composited with the
+  Direct2D `Blend` effect (via `ID2D1DeviceContext`).
 
 The same backend powers a **WIC bitmap render target** for headless thumbnail
 generation (no GPU or window required), which doubles as the test harness.
@@ -225,7 +226,10 @@ every required interface → `IInitializeWithStream::Initialize` → `SetWindow`
   layout-driven components fall back to their authored size. Vector art,
   shapes, gradients, clipping, raster images, image meshes, bones, constraints
   and state machines all render.
-- **Blend modes** other than `srcOver` are drawn as `srcOver`.
+- **Blend modes** are fully supported (all 15 Rive modes via the Direct2D
+  `Blend` effect). One caveat: a blended shape *inside a clip* composites against
+  the pre-clip backdrop, since the clip is realized with a D2D layer whose
+  contents aren't yet flattened when the backdrop is sampled.
 - Files using a different Rive **major version** than the bundled runtime
   (currently 7) are reported as unsupported.
 - Adding text/layout is a forward path: build the relevant runtime
@@ -251,9 +255,10 @@ every required interface → `IInitializeWithStream::Initialize` → `SetWindow`
 - [x] **WiX MSI installer** (`installer/` — dual-scope per-user / per-machine,
   `WixUI_Advanced`); attached to each [release](https://github.com/ajsb85/rive-peek/releases)
 - [ ] **Code-sign** the DLL and MSI (Authenticode) — the current installer is unsigned
+- [x] **Full blend-mode support** — all 15 Rive blend modes via the Direct2D
+  `Blend` effect (`ID2D1DeviceContext`), with a clean srcOver fallback
 - [ ] Text rendering (`WITH_RIVE_TEXT` — HarfBuzz + SheenBidi)
 - [ ] Yoga-based layout (`WITH_RIVE_LAYOUT`)
-- [ ] Full blend-mode support via Direct2D effects/`ID2D1DeviceContext`
 - [ ] Pause animation when the preview pane loses focus
 
 ---

@@ -21,7 +21,7 @@ cl %CFLAGS% %DEFS% /LD ^
    /Fe"%OUT%\RivePeek.dll" /Fo"%OBJ%\\" ^
    /link /DEF:"%ROOT%\src\rivepeek.def" /DLL ^
    "%ROOT%\build\rive_core.lib" ^
-   d2d1.lib windowscodecs.lib ole32.lib oleaut32.lib shlwapi.lib shell32.lib advapi32.lib user32.lib gdi32.lib ^
+   d2d1.lib dxguid.lib windowscodecs.lib ole32.lib oleaut32.lib shlwapi.lib shell32.lib advapi32.lib user32.lib gdi32.lib ^
    >"%ROOT%\build\dll_build.log" 2>&1
 
 if errorlevel 1 (

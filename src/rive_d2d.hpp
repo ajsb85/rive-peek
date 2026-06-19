@@ -19,6 +19,7 @@
 #include <wrl/client.h>
 #include <vector>
 #include <cstdint>
+#include <functional>
 
 #include "rive/factory.hpp"
 #include "rive/renderer.hpp"
@@ -183,6 +184,13 @@ private:
 
 // ---------------------------------------------------------------------------
 // Renderer — drives an ID2D1RenderTarget from the rive::Renderer interface.
+//
+// Non-`srcOver` blend modes are realized with the Direct2D `Blend` effect: the
+// shape is rendered to an offscreen "foreground" bitmap, blended against a
+// snapshot of the current backdrop, and the result copied back. This path needs
+// an ID2D1DeviceContext (queried from the render target). When that interface or
+// any step is unavailable it degrades cleanly to a plain `srcOver` draw, so the
+// common case is byte-identical to a target that never blends.
 // ---------------------------------------------------------------------------
 class D2DRenderer : public rive::Renderer {
 public:
@@ -210,12 +218,27 @@ private:
         int clipLayers = 0; // layers pushed in this save scope
     };
 
+    // A clip currently in effect, captured in the device-space form needed to
+    // replay it onto the offscreen foreground target when blending.
+    struct ClipEntry {
+        ComPtr<ID2D1Geometry> geo;     // path geometry (device-independent)
+        D2D1::Matrix3x2F xform;        // target transform active when pushed
+    };
+
     void applyTransform() { m_rt->SetTransform(m_state.transform); }
+
+    // Render `emit` (which draws onto the render target it is handed, with the
+    // transform already applied) blended against the backdrop with `mode`. Falls
+    // back to a direct srcOver draw on m_rt if anything is unavailable.
+    void blendComposite(const std::function<void(ID2D1RenderTarget*)>& emit,
+                        D2D1_BLEND_MODE mode);
 
     ID2D1RenderTarget* m_rt;
     ID2D1Factory* m_factory;
+    ComPtr<ID2D1DeviceContext> m_dc;   // QI of m_rt; null if device contexts/effects unavailable
     State m_state;
     std::vector<State> m_stack;
+    std::vector<ClipEntry> m_clips;    // active clips, in push order (for blend replay)
 };
 
 } // namespace rivepeek
