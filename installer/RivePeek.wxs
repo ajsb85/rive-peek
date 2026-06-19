@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  RivePeek MSI installer (WiX v5).
+
+  - Dual scope: Scope="perUserOrPerMachine" + WixUI_Advanced lets the user pick
+    "all users" (per-machine, HKLM, Program Files, elevated) or "just me"
+    (per-user, HKCU, %LocalAppData%, no admin) at install time.
+  - All COM registration uses Root="HKMU", which resolves to HKLM or HKCU to
+    match the chosen scope.
+  - File installs participate in the Windows Restart Manager automatically, so a
+    prevhost.exe holding RivePeek.dll is closed/handled during update/uninstall.
+  - A custom action broadcasts SHChangeNotify so Explorer refreshes immediately.
+  - Uses the verified 64-bit prevhost surrogate AppID
+    {6d2b5079-2f0b-48dd-ab7f-97cec514d30b}.
+
+  Build with installer\build_msi.bat (defines var.RiveDll and var.CaDll).
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <!-- No Scope attribute: WixUI_Advanced lets the user pick all-users vs just-me,
+       setting ALLUSERS at install time; HKMU registry resolves accordingly. -->
+  <Package Name="RivePeek"
+           Manufacturer="RivePeek contributors"
+           Version="0.2.0"
+           UpgradeCode="{B7E6B4B2-1C3A-4E9D-9A21-7C5E2F0A9D34}"
+           Compressed="yes">
+
+    <SummaryInformation Description="RivePeek - Rive (.riv) preview and thumbnail handler for Windows Explorer" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of RivePeek is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- WixUI_Advanced configuration -->
+    <Property Id="ApplicationFolderName" Value="RivePeek" />
+    <Property Id="WixAppFolder" Value="WixPerMachineFolder" />
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+    <Feature Id="Main" Title="RivePeek" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+    </Feature>
+
+    <ui:WixUI Id="WixUI_Advanced" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="APPLICATIONFOLDER" Name="RivePeek" />
+    </StandardDirectory>
+
+    <!-- Shell refresh broadcast (best-effort; never fails the install). -->
+    <Binary Id="RivePeekCa" SourceFile="$(var.CaDll)" />
+    <CustomAction Id="RivePeekNotifyShell" BinaryRef="RivePeekCa"
+                  DllEntry="NotifyShell" Execute="immediate" Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="RivePeekNotifyShell" After="InstallFinalize" />
+    </InstallExecuteSequence>
+
+    <ComponentGroup Id="ProductComponents" Directory="APPLICATIONFOLDER">
+
+      <!-- The handler DLL. Restart Manager handles in-use locks automatically. -->
+      <Component Id="MainDll" Guid="*">
+        <File Id="RivePeekDll" Source="$(var.RiveDll)" KeyPath="yes" />
+      </Component>
+
+      <!-- COM + association registration (HKMU = HKLM or HKCU by scope). -->
+      <Component Id="RegEntries" Guid="*">
+        <!-- COM class -->
+        <RegistryKey Root="HKMU" Key="Software\Classes\CLSID\{7B2E9C14-5F3A-4D6B-9E21-3C8A7F0D5B42}"
+                     ForceDeleteOnUninstall="yes">
+          <RegistryValue Type="string" Value="RivePeek Rive (.riv) Preview Handler" KeyPath="yes" />
+          <RegistryValue Name="AppID" Type="string" Value="{6d2b5079-2f0b-48dd-ab7f-97cec514d30b}" />
+          <RegistryValue Name="DisplayName" Type="string" Value="RivePeek Rive (.riv) Preview Handler" />
+        </RegistryKey>
+        <RegistryKey Root="HKMU" Key="Software\Classes\CLSID\{7B2E9C14-5F3A-4D6B-9E21-3C8A7F0D5B42}\InprocServer32">
+          <RegistryValue Type="string" Value="[#RivePeekDll]" />
+          <RegistryValue Name="ThreadingModel" Type="string" Value="Apartment" />
+        </RegistryKey>
+
+        <!-- .riv extension -> ProgID + preview + thumbnail shell extensions -->
+        <RegistryKey Root="HKMU" Key="Software\Classes\.riv">
+          <RegistryValue Type="string" Value="RivePeek.Document" />
+        </RegistryKey>
+        <RegistryKey Root="HKMU" Key="Software\Classes\.riv\ShellEx\{8895b1c6-b41f-4c1c-a562-0d564250836f}"
+                     ForceDeleteOnUninstall="yes">
+          <RegistryValue Type="string" Value="{7B2E9C14-5F3A-4D6B-9E21-3C8A7F0D5B42}" />
+        </RegistryKey>
+        <RegistryKey Root="HKMU" Key="Software\Classes\.riv\ShellEx\{e357fccd-a995-4576-b01f-234630154e96}"
+                     ForceDeleteOnUninstall="yes">
+          <RegistryValue Type="string" Value="{7B2E9C14-5F3A-4D6B-9E21-3C8A7F0D5B42}" />
+        </RegistryKey>
+
+        <!-- ProgID -->
+        <RegistryKey Root="HKMU" Key="Software\Classes\RivePeek.Document"
+                     ForceDeleteOnUninstall="yes">
+          <RegistryValue Type="string" Value="Rive Animation" />
+        </RegistryKey>
+        <RegistryKey Root="HKMU" Key="Software\Classes\RivePeek.Document\ShellEx\{8895b1c6-b41f-4c1c-a562-0d564250836f}">
+          <RegistryValue Type="string" Value="{7B2E9C14-5F3A-4D6B-9E21-3C8A7F0D5B42}" />
+        </RegistryKey>
+        <RegistryKey Root="HKMU" Key="Software\Classes\RivePeek.Document\ShellEx\{e357fccd-a995-4576-b01f-234630154e96}">
+          <RegistryValue Type="string" Value="{7B2E9C14-5F3A-4D6B-9E21-3C8A7F0D5B42}" />
+        </RegistryKey>
+
+        <!-- Approved preview-handlers list (Shell gatekeeper) -->
+        <RegistryValue Root="HKMU"
+                       Key="Software\Microsoft\Windows\CurrentVersion\PreviewHandlers"
+                       Name="{7B2E9C14-5F3A-4D6B-9E21-3C8A7F0D5B42}"
+                       Type="string" Value="RivePeek Rive (.riv) Preview Handler" />
+      </Component>
+
+    </ComponentGroup>
+  </Package>
+</Wix>

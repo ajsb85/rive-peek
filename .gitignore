@@ -25,3 +25,6 @@ docs/*.mp4
 *.user
 third_party/
 docs/signpath-application.md
+installer/rivepeek_ca.dll
+installer/rivepeek_ca.exp
+installer/rivepeek_ca.lib
