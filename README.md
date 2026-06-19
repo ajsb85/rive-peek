@@ -1,5 +1,11 @@
 # RivePeek — Rive (`.riv`) preview handler for Windows Explorer
 
+![platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011%20x64-0078D6?logo=windows)
+![language](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus)
+![graphics](https://img.shields.io/badge/render-Direct2D%20%2B%20WIC-5C2D91)
+[![license](https://img.shields.io/github/license/ajsb85/rive-win-preview)](LICENSE)
+[![release](https://img.shields.io/github/v/release/ajsb85/rive-win-preview?include_prereleases&sort=semver)](https://github.com/ajsb85/rive-win-preview/releases)
+
 RivePeek is a native Windows **Shell preview handler** that renders animated
 [Rive](https://rive.app) `.riv` files live in the File Explorer preview pane —
 the same mechanism Windows uses to preview PDFs, Office documents and images.
@@ -18,6 +24,22 @@ first-frame thumbnail as their icon in the Explorer file grid.
 > Validated against **887 marketplace `.riv` files: 886 render successfully
 > (99.9%)**. The single outlier is rejected as `malformed` by the Rive runtime
 > itself during import.
+
+---
+
+## Features
+
+- 🎬 **Animated preview pane** — the default artboard's state machine (or first
+  animation) plays live while the file is selected.
+- 🖼️ **Static thumbnails** — first-frame `.riv` thumbnails as grid icons via
+  `IThumbnailProvider`.
+- 🛡️ **Process-isolated** — runs in Windows' `prevhost.exe` surrogate; a bad
+  file can't crash Explorer.
+- 🪶 **Dependency-free** — only the core Rive runtime is compiled; rendering is
+  pure Direct2D + WIC. The `RivePeek.dll` is self-contained (static CRT).
+- 🔒 **Per-user install** — registers under `HKCU`; no administrator rights.
+- 🧪 **Headless tooling** — `rivshot` renders any `.riv` to PNG and validates a
+  whole corpus.
 
 ---
 
@@ -98,6 +120,21 @@ rive-runtime/         Rive C++ runtime (git submodule)
 
 ---
 
+## Quick start (prebuilt)
+
+1. Download `RivePeek.dll` (and the `install` scripts) from the
+   [latest release](https://github.com/ajsb85/rive-win-preview/releases).
+2. Put `RivePeek.dll` somewhere stable, e.g. `%LOCALAPPDATA%\RivePeek\`.
+3. Register it (per-user, no admin):
+   ```powershell
+   .\install\register.ps1 -Dll "$env:LOCALAPPDATA\RivePeek\RivePeek.dll"
+   ```
+4. In Explorer, press **Alt + P** for the preview pane and select a `.riv` file.
+
+Prefer to build from source? See below.
+
+---
+
 ## Building
 
 Requirements: **Visual Studio 2022 Build Tools** (MSVC v143) and the **Windows
@@ -114,12 +151,15 @@ This produces, in `build\bin\`:
 
 | Artifact | Purpose |
 |---|---|
-| `RivePeek.dll` | the preview handler (register to install) |
+| `RivePeek.dll` | the preview + thumbnail handler (register to install) |
 | `rivshot.exe` | `rivshot in.riv out.png [size] [seconds]` — headless render |
 | `preview_test.exe` | drives the COM pipeline in-process and screenshots it |
+| `surrogate_test.exe` | activates the handler in `prevhost.exe` (like Explorer) |
+| `thumb_test.exe` | renders the `IThumbnailProvider` thumbnail to a PNG |
 
 Individual steps: `build_rive_core.bat` (the `rive_core.lib` static lib),
-`build_dll.bat`, `build_rivshot.bat`, `build_test.bat`.
+`build_dll.bat`, `build_rivshot.bat`, `build_test.bat`,
+`build_surrogate_test.bat`, `build_thumb_test.bat`.
 
 > The build environment is configured by `build\env.bat`, which auto-detects the
 > newest MSVC toolset and Windows SDK via `vswhere`. It deliberately avoids
@@ -195,6 +235,36 @@ every required interface → `IInitializeWithStream::Initialize` → `SetWindow`
 - Adding text/layout is a forward path: build the relevant runtime
   dependencies, define `WITH_RIVE_TEXT` / `WITH_RIVE_LAYOUT`, and implement
   `Factory::decodeFont`.
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| Preview pane is blank / shows nothing | Make sure it's the **Preview** pane (Alt + P), not the **Details** pane. Re-run `install\register.ps1` (it restarts Explorer). |
+| `.riv` shows a generic picture/file icon | Old thumbnail cache. Restart Explorer, or clear it: `taskkill /f /im explorer.exe & del /q "%LOCALAPPDATA%\Microsoft\Windows\Explorer\thumbcache_*.db" & start explorer`. |
+| Nothing happens at all | Confirm **Folder Options ▸ View ▸ "Show preview handlers in preview pane"** is enabled. |
+| Want to see what the handler is doing | Set `RIVEPEEK_LOG=1` and read `%TEMP%\RivePeek.log` — it traces every COM call. |
+| Build can't overwrite `RivePeek.dll` | The DLL is loaded by a running `prevhost.exe`/Explorer. Close previews (or `taskkill /f /im prevhost.exe`) and rebuild. |
+
+---
+
+## Roadmap
+
+- [ ] Text rendering (`WITH_RIVE_TEXT` — HarfBuzz + SheenBidi)
+- [ ] Yoga-based layout (`WITH_RIVE_LAYOUT`)
+- [ ] Full blend-mode support via Direct2D effects/`ID2D1DeviceContext`
+- [ ] Pause animation when the preview pane loses focus
+- [ ] A signed installer (MSIX / `.msi`)
+
+---
+
+## Contributing
+
+Contributions are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to
+build, the project layout, coding conventions, and good first issues (the
+roadmap items above are all self-contained starting points).
 
 ---
 
