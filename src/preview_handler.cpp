@@ -138,8 +138,11 @@ IFACEMETHODIMP RivePreviewHandler::SetWindow(HWND hwnd, const RECT* prc) {
     if (prc) m_rect = *prc;
     if (m_hwnd && m_parent) {
         SetParent(m_hwnd, m_parent);
-        MoveWindow(m_hwnd, m_rect.left, m_rect.top, m_rect.right - m_rect.left,
-                   m_rect.bottom - m_rect.top, TRUE);
+        // SWP_NOACTIVATE: resize/reparent without stealing keyboard focus from
+        // Explorer's file list (the shell drives focus via IPreviewHandler).
+        SetWindowPos(m_hwnd, nullptr, m_rect.left, m_rect.top,
+                     m_rect.right - m_rect.left, m_rect.bottom - m_rect.top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
     }
     return S_OK;
 }
@@ -147,8 +150,9 @@ IFACEMETHODIMP RivePreviewHandler::SetWindow(HWND hwnd, const RECT* prc) {
 IFACEMETHODIMP RivePreviewHandler::SetRect(const RECT* prc) {
     if (prc) m_rect = *prc;
     if (m_hwnd) {
-        MoveWindow(m_hwnd, m_rect.left, m_rect.top, m_rect.right - m_rect.left,
-                   m_rect.bottom - m_rect.top, TRUE);
+        SetWindowPos(m_hwnd, nullptr, m_rect.left, m_rect.top,
+                     m_rect.right - m_rect.left, m_rect.bottom - m_rect.top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
     }
     return S_OK;
 }
@@ -392,8 +396,51 @@ void RivePreviewHandler::onPaint() {
     ValidateRect(m_hwnd, nullptr);
 }
 
+// Is the preview being actively viewed — i.e. should we keep animating? True if
+// our window holds keyboard focus, or the foreground top-level window belongs to
+// the host that shows us. Self-calibrating: until we have positively seen an
+// "active" state at least once, we never report inactive, so a host model where
+// our window's root is never itself the foreground can't wrongly freeze us.
+bool RivePreviewHandler::previewActive() {
+    if (!m_hwnd) return false;
+    bool active = false;
+
+    // (1) Keyboard focus is on our preview window (or a descendant).
+    HWND focus = ::GetFocus(); // focus within our thread's queue
+    if (focus && (focus == m_hwnd || IsChild(m_hwnd, focus))) {
+        active = true;
+    }
+
+    // (2) The foreground top-level belongs to our host (covers the common case
+    //     where the pane is shown without holding keyboard focus).
+    if (!active) {
+        HWND fg = GetForegroundWindow();
+        if (fg) {
+            DWORD fgPid = 0;
+            GetWindowThreadProcessId(fg, &fgPid);
+            HWND root = GetAncestor(m_hwnd, GA_ROOT);
+            DWORD rootPid = 0;
+            if (root) GetWindowThreadProcessId(root, &rootPid);
+            if (fgPid == GetCurrentProcessId() || fg == root ||
+                (root && rootPid == fgPid)) {
+                active = true;
+            }
+        }
+    }
+
+    if (active) m_everActive = true;
+    return active || !m_everActive;
+}
+
 void RivePreviewHandler::tick() {
     if (!m_scene) return;
+    if (!previewActive()) {
+        // Paused: the host/preview isn't in the foreground. Keep the clock
+        // current so dt doesn't spike on resume; skip advancing + repainting so
+        // a background preview costs nothing but this cheap check.
+        QueryPerformanceCounter(&m_last);
+        return;
+    }
     LARGE_INTEGER now;
     QueryPerformanceCounter(&now);
     float dt = (float)(now.QuadPart - m_last.QuadPart) / (float)m_freq.QuadPart;

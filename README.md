@@ -46,6 +46,8 @@ first-frame thumbnail as their icon in the Explorer file grid.
 - 🛡️ **Process-isolated + fault-guarded** — runs in Windows' `prevhost.exe`
   surrogate, and load/advance/draw/teardown are wrapped in SEH so even a
   pathological file degrades to a blank preview instead of crashing the host.
+- 💤 **Idles when backgrounded** — animation pauses when the host/preview isn't
+  in the foreground, and resizes never steal focus from Explorer's file list.
 - 🪶 **Self-contained** — the core Rive runtime plus HarfBuzz/SheenBidi are
   compiled in; rendering is pure Direct2D + WIC. `RivePeek.dll` links the static
   CRT and needs no redistributables.
@@ -282,7 +284,9 @@ every required interface → `IInitializeWithStream::Initialize` → `SetWindow`
   linked); shaping + variable/embedded fonts
 - [x] **Yoga-based layout** (`WITH_RIVE_LAYOUT` — rive-app/yoga, statically
   linked); flexbox positioning for responsive artboards
-- [ ] Pause animation when the preview pane loses focus
+- [x] **Idle pause** — the animation timer stops advancing when the host/preview
+  isn't in the foreground, and resize/reparent use `SWP_NOACTIVATE` so the pane
+  never steals keyboard focus from Explorer's file list
 
 ---
 

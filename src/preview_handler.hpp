@@ -86,6 +86,7 @@ public:
 private:
     void onPaint();
     void tick();
+    bool previewActive(); // is the host/preview in the foreground? (animation gate)
     bool ensureRenderTarget();
     void releaseDeviceResources();
     void createPreviewWindow();
@@ -111,6 +112,7 @@ private:
     UINT_PTR m_timer = 0;
     LARGE_INTEGER m_freq = {};
     LARGE_INTEGER m_last = {};
+    bool m_everActive = false; // have we ever confirmed the foreground gate works?
 };
 
 } // namespace rivepeek
