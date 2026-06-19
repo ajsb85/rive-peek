@@ -24,3 +24,4 @@ docs/*.mp4
 .vs/
 *.user
 third_party/
+docs/signpath-application.md
