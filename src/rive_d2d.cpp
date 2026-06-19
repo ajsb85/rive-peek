@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Alexander Salas Bastidas <ajsb85@firechip.dev>
+//
 // rive_d2d.cpp — Direct2D + WIC implementation of the Rive Factory / Renderer.
 #include "rive_d2d.hpp"
 

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Alexander Salas Bastidas <ajsb85@firechip.dev>
+//
 // guids.hpp — CLSID for the RivePeek preview handler and shared registration
 // constants.
 #pragma once

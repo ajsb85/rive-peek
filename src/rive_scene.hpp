@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Alexander Salas Bastidas <ajsb85@firechip.dev>
+//
 // rive_scene.hpp — Loads a .riv into a drawable scene: imports the file, picks
 // the default artboard and its default state machine (or first animation), and
 // advances + draws it fit/centered into a target rectangle.

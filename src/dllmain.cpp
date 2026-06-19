@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Alexander Salas Bastidas <ajsb85@firechip.dev>
+//
 // dllmain.cpp — COM server plumbing: module lifetime, class factory, the four
 // exported entry points, and (un)registration of the preview handler.
 #define NOMINMAX

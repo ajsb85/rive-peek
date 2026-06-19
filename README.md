@@ -3,8 +3,8 @@
 ![platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011%20x64-0078D6?logo=windows)
 ![language](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus)
 ![graphics](https://img.shields.io/badge/render-Direct2D%20%2B%20WIC-5C2D91)
-[![license](https://img.shields.io/github/license/ajsb85/rive-win-preview)](LICENSE)
-[![release](https://img.shields.io/github/v/release/ajsb85/rive-win-preview?include_prereleases&sort=semver)](https://github.com/ajsb85/rive-win-preview/releases)
+[![license](https://img.shields.io/github/license/ajsb85/rive-peek)](LICENSE)
+[![release](https://img.shields.io/github/v/release/ajsb85/rive-peek?include_prereleases&sort=semver)](https://github.com/ajsb85/rive-peek/releases)
 
 RivePeek is a native Windows **Shell preview handler** that renders animated
 [Rive](https://rive.app) `.riv` files live in the File Explorer preview pane —
@@ -119,7 +119,7 @@ rive-runtime/         Rive C++ runtime (git submodule)
 ## Quick start (prebuilt)
 
 1. Download `RivePeek.dll` (and the `install` scripts) from the
-   [latest release](https://github.com/ajsb85/rive-win-preview/releases).
+   [latest release](https://github.com/ajsb85/rive-peek/releases).
 2. Put `RivePeek.dll` somewhere stable, e.g. `%LOCALAPPDATA%\RivePeek\`.
 3. Register it (per-user, no admin):
    ```powershell
@@ -138,8 +138,8 @@ Requirements: **Visual Studio 2022 Build Tools** (MSVC v143) and the **Windows
 themselves.
 
 ```bat
-git clone --recurse-submodules https://github.com/ajsb85/rive-win-preview.git
-cd rive-win-preview
+git clone --recurse-submodules https://github.com/ajsb85/rive-peek.git
+cd rive-peek
 build\build_all.bat
 ```
 

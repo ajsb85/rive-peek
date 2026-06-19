@@ -25,8 +25,8 @@ No CMake is required — `build\*.bat` configure the MSVC toolchain themselves v
 ## Getting the source
 
 ```bat
-git clone --recurse-submodules https://github.com/ajsb85/rive-win-preview.git
-cd rive-win-preview
+git clone --recurse-submodules https://github.com/ajsb85/rive-peek.git
+cd rive-peek
 ```
 
 If you forgot `--recurse-submodules`:

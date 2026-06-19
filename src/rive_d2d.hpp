@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Alexander Salas Bastidas <ajsb85@firechip.dev>
+//
 // rive_d2d.hpp — A Direct2D + WIC backend for the Rive C++ runtime.
 //
 // Implements rive::Factory and rive::Renderer (plus the RenderPath / RenderPaint
