@@ -1,0 +1,21 @@
+# Build outputs
+build/obj/
+build/bin/
+build/thumbs/
+build/*.lib
+build/*.log
+build/*.txt
+build/*.png
+build/_test.bat
+
+# Stray render outputs
+*.png
+!docs/*.png
+
+# MSVC / editor cruft
+*.obj
+*.pdb
+*.exp
+*.ilk
+.vs/
+*.user

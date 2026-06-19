@@ -1,0 +1,40 @@
+Windows Registry Editor Version 5.00
+
+; ===========================================================================
+; RivePeek — manual registration (alternative to: regsvr32 RivePeek.dll)
+;
+; 1. Replace EVERY occurrence of the DLL path below with the absolute path to
+;    your built RivePeek.dll. In .reg files each backslash must be DOUBLED.
+;       example: C:\\Tools\\RivePeek\\RivePeek.dll
+; 2. Right-click this file > Merge (requires administrator).
+;
+; CLSID  {7B2E9C14-5F3A-4D6B-9E21-3C8A7F0D5B42}
+; AppID  {6d2b345a-3aa5-4614-b7ce-69ae4657d472}  (prevhost.exe surrogate)
+; ===========================================================================
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID\{7B2E9C14-5F3A-4D6B-9E21-3C8A7F0D5B42}]
+@="RivePeek Rive (.riv) Preview Handler"
+"AppID"="{6d2b345a-3aa5-4614-b7ce-69ae4657d472}"
+"DisplayName"="RivePeek Rive (.riv) Preview Handler"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID\{7B2E9C14-5F3A-4D6B-9E21-3C8A7F0D5B42}\InprocServer32]
+@="C:\\Path\\To\\RivePeek.dll"
+"ThreadingModel"="Apartment"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\.riv]
+@="RivePeek.Document"
+"PerceivedType"="image"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\.riv\ShellEx\{8895b1c6-b41f-4c1c-a562-0d564250836f}]
+@="{7B2E9C14-5F3A-4D6B-9E21-3C8A7F0D5B42}"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\RivePeek.Document]
+@="Rive Animation"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\RivePeek.Document\ShellEx\{8895b1c6-b41f-4c1c-a562-0d564250836f}]
+@="{7B2E9C14-5F3A-4D6B-9E21-3C8A7F0D5B42}"
+
+; The approved-preview-handlers gatekeeper. Without this entry the Shell will
+; refuse to load the handler.
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\PreviewHandlers]
+"{7B2E9C14-5F3A-4D6B-9E21-3C8A7F0D5B42}"="RivePeek Rive (.riv) Preview Handler"
